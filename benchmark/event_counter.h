@@ -126,13 +126,13 @@ struct event_collector {
 #endif
 
 
-  void start() {
+  really_inline void start() {
 #if defined(__linux)
     linux_events.start();
 #endif
     start_clock = steady_clock::now();
   }
-  event_count& end() {
+  really_inline event_count& end() {
     time_point<steady_clock> end_clock = steady_clock::now();
 #if defined(__linux)
     linux_events.end(count.event_counts);
