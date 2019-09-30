@@ -98,8 +98,7 @@ struct option_struct {
   Architecture architecture = Architecture::UNSUPPORTED;
   bool stage1_only = false;
 
-  int32_t warmup_iterations = -1;
-  int32_t iterations = -1;
+  int32_t iterations = 200;
 
   bool verbose = false;
   bool tabbed_output = false;
@@ -142,15 +141,6 @@ struct option_struct {
       int optind = 1;
     #endif
 
-    // Handle defaults
-    if (iterations == -1) {
-      #if defined(DEBUG)
-        iterations = 1;
-      #else
-        iterations = 10;
-      #endif
-    }
-
     // If architecture is not specified, pick the best supported architecture by default
     if (architecture == Architecture::UNSUPPORTED) {
       architecture = find_best_supported_architecture();
@@ -185,7 +175,7 @@ struct json_stats {
   size_t blocks_with_16_structurals = 0;
   size_t blocks_with_16_structurals_flipped = 0;
 
-  json_stats(padded_string& json, ParsedJson& pj) {
+  json_stats(const padded_string& json, const ParsedJson& pj) {
     bytes = json.size();
     blocks = bytes / BYTES_PER_BLOCK;
     if (bytes % BYTES_PER_BLOCK > 0) { blocks++; } // Account for remainder block
@@ -195,10 +185,10 @@ struct json_stats {
     bool last_block_has_utf8 = false;
     for (size_t block=0; block<blocks; block++) {
       // Find utf-8 in the block
-      bool block_has_utf8 = false;
       size_t block_start = block*BYTES_PER_BLOCK;
       size_t block_end = block+BYTES_PER_BLOCK;
       if (block_end > json.size()) { block_end = json.size(); }
+      bool block_has_utf8 = false;
       for (size_t i=block_start; i<block_end; i++) {
         if (json.data()[i] & 0x80) {
           block_has_utf8 = true;
@@ -257,38 +247,77 @@ struct json_stats {
   }
 };
 
-padded_string load_file(char *filename) {
+padded_string load_json(char *filename) {
   try {
     verbose() << "[verbose] loading " << filename << endl;
-    padded_string p = simdjson::get_corpus(filename);
-    verbose() << "[verbose] loaded " << filename << " (" << p.size() << " bytes)" << endl;
-    return p;
+    padded_string json = simdjson::get_corpus(filename);
+    verbose() << "[verbose] loaded " << filename << " (" << json.size() << " bytes)" << endl;
+    return json;
   } catch (const exception &) { // caught by reference to base
     exit_error(string("Could not load the file ") + filename);
     exit(EXIT_FAILURE); // This is not strictly necessary but removes the warning
   }
 }
 
+struct progress_bar {
+  int max_value;
+  int total_ticks;
+  double ticks_per_value;
+  int next_tick;
+  progress_bar(int _max_value, int _total_ticks) : max_value(_max_value), total_ticks(_total_ticks), ticks_per_value(double(_total_ticks)/_max_value), next_tick(0) {}
+
+  void print(int value) {
+    double ticks = value*ticks_per_value;
+    if (ticks >= total_ticks) {
+      ticks = total_ticks-1;
+    }
+    // if (ticks >= next_tick) {
+      printf("\r[");
+      int tick;
+      for (tick=0;tick<=ticks; tick++) {
+        printf("=");
+      }
+      if (tick<total_ticks) {
+        printf(">");
+        tick++;
+      }
+      for (;tick<total_ticks;tick++) {
+        printf(" ");
+      }
+      printf("]");
+      next_tick = tick;
+    // }
+  }
+  void print_finish() {
+    print(100);
+    printf("\n");
+  }
+};
+
 struct benchmarker {
-  // input
-  json_parser& parser;
+  // JSON text from loading the file. Owns the memory.
+  const padded_string json;
+  // JSON filename
   char *filename;
+  // Parser that will parse the JSON file
+  const json_parser& parser;
+  // Event collector that can be turned on to measure cycles, missed branches, etc.
   event_collector& collector;
 
-  // data
-  padded_string json;
+  // Statistics about the JSON file independent of its speed (amount of utf-8, structurals, etc.).
+  // Loaded on first parse.
   json_stats* stats;
-
-  // stats
+  // Speed and event summary for full parse (not including allocation)
   event_aggregate all_stages;
-  event_aggregate allocate_stage;
+  // Speed and event summary for stage 1
   event_aggregate stage1;
+  // Speed and event summary for stage 2
   event_aggregate stage2;
+  // Speed and event summary for allocation
+  event_aggregate allocate_stage;
 
-  benchmarker(json_parser& _parser, char *_filename, event_collector& _collector)
-    : parser(_parser), filename(_filename), collector(_collector), 
-      json(load_file(_filename)), stats(NULL) {
-  }
+  benchmarker(char *_filename, const json_parser& _parser, event_collector& _collector)
+    : json(load_json(_filename)), filename(_filename), parser(_parser), collector(_collector), stats(NULL) {}
 
   ~benchmarker() {
     if (stats) {
@@ -296,7 +325,7 @@ struct benchmarker {
     }
   }
 
-  int iterations() {
+  int iterations() const {
     return all_stages.iterations;
   }
 
@@ -437,28 +466,44 @@ struct benchmarker {
 };
 
 int main(int argc, char *argv[]) {
+  // Read options
   exe_name = argv[0];
   option_struct options(argc, argv);
   if (options.verbose) {
     verbose_stream = &cout;
   }
 
+  // Start collecting events. We put this early so if it prints an error message, it's the
+  // first thing printed.
   event_collector collector;
 
+  // Print preamble
   if (!options.tabbed_output) {
     printf("number of iterations %u \n", options.iterations);
   }
 
+  // Set up benchmarkers by reading all files
   json_parser parser(options.architecture);
+  vector<benchmarker*> benchmarkers;
   for (size_t i=0; i<options.files.size(); i++) {
-    benchmarker benchmarker(parser, options.files[i], collector);
+    benchmarkers.push_back(new benchmarker(options.files[i], parser, collector));
+  }
 
-    for (int iteration = 0; iteration < options.iterations; iteration++) {
-      verbose() << "[verbose] event iteration #" << iteration << endl;
-      benchmarker.run_iteration();
+  // Run the benchmarks
+  progress_bar progress(options.iterations, 50);
+  for (int iteration = 0; iteration < options.iterations; iteration++) {
+    if (!options.verbose) { progress.print(iteration); }
+    // Benchmark each file once per iteration
+    for (size_t i=0; i<options.files.size(); i++) {
+      verbose() << "[verbose] " << benchmarkers[i]->filename << " iteration #" << iteration << endl;
+      benchmarkers[i]->run_iteration();
     }
+  }
+  if (!options.verbose) { progress.print_finish(); }
 
-    benchmarker.print(options.tabbed_output);
+  for (size_t i=0; i<options.files.size(); i++) {
+    benchmarkers[i]->print(options.tabbed_output);
+    delete benchmarkers[i];
   }
 
   return EXIT_SUCCESS;
