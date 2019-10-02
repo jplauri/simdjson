@@ -186,7 +186,7 @@ struct json_stats {
     for (size_t block=0; block<blocks; block++) {
       // Find utf-8 in the block
       size_t block_start = block*BYTES_PER_BLOCK;
-      size_t block_end = block+BYTES_PER_BLOCK;
+      size_t block_end = block_start+BYTES_PER_BLOCK;
       if (block_end > json.size()) { block_end = json.size(); }
       bool block_has_utf8 = false;
       for (size_t i=block_start; i<block_end; i++) {
@@ -329,7 +329,7 @@ struct benchmarker {
     return all_stages.iterations;
   }
 
-  void run_iteration() {
+  void run_iteration(bool stage1_only=false) {
     // Allocate ParsedJson
     collector.start();
     ParsedJson pj;
@@ -353,16 +353,23 @@ struct benchmarker {
     }
 
     // Stage 2 (unified machine)
-    collector.start();
-    result = parser.stage2((const uint8_t *)json.data(), json.size(), pj);
-    event_count stage2_count = collector.end();
-    stage2 << stage2_count;
+    event_count stage2_count;
+    if (!stage1_only || stats == NULL) {
+      if (!stage1_only) {
+        collector.start();
+      }
+      result = parser.stage2((const uint8_t *)json.data(), json.size(), pj);
+      if (!stage1_only) {
+        stage2_count = collector.end();
+        stage2 << stage2_count;
+      }
+
+      if (result != simdjson::SUCCESS) {
+        exit_error(string("Failed to parse ") + filename + " during stage 2: " + pj.get_error_message());
+      }
+    }
 
     all_stages << (stage1_count + stage2_count);
-
-    if (result != simdjson::SUCCESS) {
-      exit_error(string("Failed to parse ") + filename + " during stage 2: " + pj.get_error_message());
-    }
 
     // Calculate stats the first time we parse
     if (stats == NULL) {
@@ -496,7 +503,7 @@ int main(int argc, char *argv[]) {
     // Benchmark each file once per iteration
     for (size_t i=0; i<options.files.size(); i++) {
       verbose() << "[verbose] " << benchmarkers[i]->filename << " iteration #" << iteration << endl;
-      benchmarkers[i]->run_iteration();
+      benchmarkers[i]->run_iteration(options.stage1_only);
     }
   }
   if (!options.verbose) { progress.print_finish(); }
