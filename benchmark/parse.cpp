@@ -274,7 +274,7 @@ struct progress_bar {
     // if (ticks >= next_tick) {
       printf("\r[");
       int tick;
-      for (tick=0;tick<=ticks; tick++) {
+      for (tick=0; tick<=ticks; tick++) {
         printf("=");
       }
       if (tick<total_ticks) {
@@ -289,8 +289,11 @@ struct progress_bar {
     // }
   }
   void print_finish() {
-    print(100);
-    printf("\n");
+    printf("\r");
+    for (int tick=0; tick<=total_ticks+2; tick++) {
+      printf(" ");
+    }
+    printf("\r");
   }
 };
 
