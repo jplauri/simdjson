@@ -170,10 +170,10 @@ struct json_stats {
   size_t blocks_with_utf8_flipped = 0;
   size_t blocks_with_0_structurals = 0;
   size_t blocks_with_0_structurals_flipped = 0;
-  size_t blocks_with_8_structurals = 0;
-  size_t blocks_with_8_structurals_flipped = 0;
-  size_t blocks_with_16_structurals = 0;
-  size_t blocks_with_16_structurals_flipped = 0;
+  size_t blocks_with_9_structurals = 0;
+  size_t blocks_with_9_structurals_flipped = 0;
+  size_t blocks_with_17_structurals = 0;
+  size_t blocks_with_17_structurals_flipped = 0;
 
   json_stats(const padded_string& json, const ParsedJson& pj) {
     bytes = json.size();
@@ -206,8 +206,8 @@ struct json_stats {
 
     // Calculate stats on blocks that will trigger structural count if statements / mispredictions
     bool last_block_has_0_structurals = false;
-    bool last_block_has_8_structurals = false;
-    bool last_block_has_16_structurals = false;
+    bool last_block_has_9_structurals = false;
+    bool last_block_has_17_structurals = false;
     size_t structural=0;
     for (size_t block=0; block<blocks; block++) {
       // Count structurals in the block
@@ -226,23 +226,23 @@ struct json_stats {
       }
       last_block_has_0_structurals = block_has_0_structurals;
 
-      bool block_has_8_structurals = block_structurals >= 8;
-      if (block_has_8_structurals) {
-        blocks_with_8_structurals++;
+      bool block_has_9_structurals = block_structurals >= 9;
+      if (block_has_9_structurals) {
+        blocks_with_9_structurals++;
       }
-      if (block > 0 && last_block_has_8_structurals != block_has_8_structurals) {
-        blocks_with_8_structurals_flipped++;
+      if (block > 0 && last_block_has_9_structurals != block_has_9_structurals) {
+        blocks_with_9_structurals_flipped++;
       }
-      last_block_has_8_structurals = block_has_8_structurals;
+      last_block_has_9_structurals = block_has_9_structurals;
 
-      bool block_has_16_structurals = block_structurals >= 16;
-      if (block_has_16_structurals) {
-        blocks_with_16_structurals++;
+      bool block_has_17_structurals = block_structurals >= 17;
+      if (block_has_17_structurals) {
+        blocks_with_17_structurals++;
       }
-      if (block > 0 && last_block_has_16_structurals != block_has_16_structurals) {
-        blocks_with_16_structurals_flipped++;
+      if (block > 0 && last_block_has_17_structurals != block_has_17_structurals) {
+        blocks_with_17_structurals_flipped++;
       }
-      last_block_has_16_structurals = block_has_16_structurals;
+      last_block_has_17_structurals = block_has_17_structurals;
     }
   }
 };
@@ -448,16 +448,16 @@ struct benchmarker {
       printf("%s\n", string(strlen(filename), '=').c_str());
       printf("%9lu blocks - %10lu bytes - %5lu structurals (%5.1f %%)\n", stats->bytes / BYTES_PER_BLOCK, stats->bytes, stats->structurals, 100.0 * stats->structurals / stats->bytes);
       if (stats) {
-        printf("special blocks with: utf8 %9lu (%5.1f %%) - 0 structurals %9lu (%5.1f %%) - 8+ structurals %9lu (%5.1f %%) - 16+ structurals %9lu (%5.1f %%)\n",
+        printf("special blocks with: utf8 %9lu (%5.1f %%) - 0 structurals %9lu (%5.1f %%) - 9+ structurals %9lu (%5.1f %%) - 17+ structurals %9lu (%5.1f %%)\n",
           stats->blocks_with_utf8, 100.0 * stats->blocks_with_utf8 / stats->blocks,
           stats->blocks_with_0_structurals, 100.0 * stats->blocks_with_0_structurals / stats->blocks,
-          stats->blocks_with_8_structurals, 100.0 * stats->blocks_with_8_structurals / stats->blocks,
-          stats->blocks_with_16_structurals, 100.0 * stats->blocks_with_16_structurals / stats->blocks);
-        printf("special block flips: utf8 %9lu (%5.1f %%) - 0 structurals %9lu (%5.1f %%) - 8+ structurals %9lu (%5.1f %%) - 16+ structurals %9lu (%5.1f %%)\n",
+          stats->blocks_with_9_structurals, 100.0 * stats->blocks_with_9_structurals / stats->blocks,
+          stats->blocks_with_17_structurals, 100.0 * stats->blocks_with_17_structurals / stats->blocks);
+        printf("special block flips: utf8 %9lu (%5.1f %%) - 0 structurals %9lu (%5.1f %%) - 9+ structurals %9lu (%5.1f %%) - 17+ structurals %9lu (%5.1f %%)\n",
           stats->blocks_with_utf8_flipped, 100.0 * stats->blocks_with_utf8_flipped / stats->blocks,
           stats->blocks_with_0_structurals_flipped, 100.0 * stats->blocks_with_0_structurals_flipped / stats->blocks,
-          stats->blocks_with_8_structurals_flipped, 100.0 * stats->blocks_with_8_structurals_flipped / stats->blocks,
-          stats->blocks_with_16_structurals_flipped, 100.0 * stats->blocks_with_16_structurals_flipped / stats->blocks);
+          stats->blocks_with_9_structurals_flipped, 100.0 * stats->blocks_with_9_structurals_flipped / stats->blocks,
+          stats->blocks_with_17_structurals_flipped, 100.0 * stats->blocks_with_17_structurals_flipped / stats->blocks);
       }
       printf("\n");
       printf("All Stages\n");
