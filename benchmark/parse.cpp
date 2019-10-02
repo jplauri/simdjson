@@ -379,35 +379,32 @@ struct benchmarker {
 
   template<typename T>
   void print_aggregate(const char* prefix, const T& stage) const {
-    printf("%s%-13s: %10.1f ns (%5.1f %%) - %8.4f ns per block - %8.4f ns per byte - %8.4f ns per structural - %8.3f GB/s\n",
+    printf("%s%-13s: %8.4f ns per block (%5.1f %%) - %8.4f ns per byte - %8.4f ns per structural - %8.3f GB/s\n",
       prefix,
       "Speed",
-      stage.elapsed_ns(), // per file
-      100.0 * stage.elapsed_sec() / all_stages.elapsed_sec(), // %
       stage.elapsed_ns() / stats->blocks, // per block
+      100.0 * stage.elapsed_sec() / all_stages.elapsed_sec(), // %
       stage.elapsed_ns() / stats->bytes, // per byte
       stage.elapsed_ns() / stats->structurals, // per structural
       (json.size() / 1000000000.0) / stage.elapsed_sec() // GB/s
     );
 
     if (collector.has_events()) {
-      printf("%s%-13s: %5.2f (%5.2f %%) - %2.3f per block - %2.3f per byte - %2.3f per structural - %2.3f GHz est. frequency\n",
+      printf("%s%-13s: %2.3f per block (%5.2f %%) - %2.3f per byte - %2.3f per structural - %2.3f GHz est. frequency\n",
         prefix,
         "Cycles",
-        stage.cycles(),
-        100.0 * stage.cycles() / all_stages.cycles(),
         stage.cycles() / stats->blocks,
+        100.0 * stage.cycles() / all_stages.cycles(),
         stage.cycles() / stats->bytes,
         stage.cycles() / stats->structurals,
         (stage.cycles() / stage.elapsed_sec()) / 1000000000.0
       );
 
-      printf("%s%-13s: %10f (%5.2f %%) - %2.2f per block - %2.2f per byte - %2.2f per structural - %2.2f per cycle\n",
+      printf("%s%-13s: %2.2f per block (%5.2f %%) - %2.2f per byte - %2.2f per structural - %2.2f per cycle\n",
         prefix,
         "Instructions",
-        stage.instructions(),
-        100.0 * stage.instructions() / all_stages.instructions(),
         stage.instructions() / stats->blocks,
+        100.0 * stage.instructions() / all_stages.instructions(),
         stage.instructions() / stats->bytes,
         stage.instructions() / stats->structurals,
         stage.instructions() / stage.cycles()
